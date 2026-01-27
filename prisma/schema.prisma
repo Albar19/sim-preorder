@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  password     String
+  name         String
+  role         String        @default("USER")
+  phone        String?
+  address      String?
+  orders       Order[]
+  deliveries   Delivery[]
+  itemRequests ItemRequest[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Item {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  stock       Int         @default(0)
+  imageUrl    String?
+  isActive    Boolean     @default(true)
+  orderItems  OrderItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  orderNumber String      @unique
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       OrderItem[]
+  totalAmount Float
+  status      String      @default("PENDING")
+  delivery    Delivery?
+  notes       String?
+  txHash      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model OrderItem {
+  id       String @id @default(cuid())
+  orderId  String
+  order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemId   String
+  item     Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantity Int
+  price    Float
+}
+
+model Delivery {
+  id          String    @id @default(cuid())
+  orderId     String    @unique
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kurirId     String
+  kurir       User      @relation(fields: [kurirId], references: [id], onDelete: Cascade)
+  status      String    @default("ASSIGNED")
+  notes       String?
+  pickedUpAt  DateTime?
+  deliveredAt DateTime?
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model StatusLog {
+  id          String   @id @default(cuid())
+  orderId     String
+  status      String
+  txHash      String?
+  description String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+}
+
+model ItemRequest {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemName    String
+  description String?
+  imageUrl    String?
+  quantity    Int      @default(1)
+  maxPrice    Float?
+  status      String   @default("PENDING")
+  adminNotes  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

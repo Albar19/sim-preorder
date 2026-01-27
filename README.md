@@ -1,4 +1,14 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SIM Pre-order Credit Tracking
+
+## Akun Demo (Demo Accounts)
+Untuk mencoba aplikasi, Anda dapat menggunakan akun-akun berikut (Password: `admin123`):
+- **Owner**: `admin@preorder.com`
+- **Kurir**: `kurir@preorder.com`
+- **User**: `user@preorder.com`
+
+Detail lebih lanjut ada di file [AKUN_DEMO.md](./AKUN_DEMO.md).
+
+---
 
 ## Getting Started
 

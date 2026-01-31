@@ -167,13 +167,6 @@ export default function RegisterPage() {
                             />
                         </div>
 
-                        {/* Info */}
-                        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                            <p className="text-blue-300 text-xs text-center">
-                                Akun baru akan otomatis menjadi User. Owner dapat mengubah role Anda jika diperlukan.
-                            </p>
-                        </div>
-
                         <button
                             type="submit"
                             disabled={loading}

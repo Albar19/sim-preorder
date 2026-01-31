@@ -33,14 +33,6 @@ export default function HomePage() {
 
       {/* Hero Section */}
       <main className="relative z-10 flex flex-col items-center justify-center text-center px-4 py-20">
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full text-purple-300 text-sm mb-8">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
-          </span>
-          Powered by Web3 Technology
-        </div>
-
         <h1 className="text-5xl md:text-7xl font-bold text-white max-w-4xl leading-tight">
           Sistem Manajemen
           <span className="bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent"> Pre-Order </span>
@@ -48,7 +40,7 @@ export default function HomePage() {
         </h1>
 
         <p className="mt-6 text-lg md:text-xl text-slate-400 max-w-2xl">
-          Kelola kredit barang dengan transparan. Lacak pesanan secara real-time dengan teknologi blockchain untuk pencatatan yang immutable.
+          Kelola kredit barang dengan transparan. Lacak pesanan secara real-time untuk pencatatan yang akurat.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 mt-10">
@@ -108,7 +100,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="relative z-10 text-center py-8 text-slate-500 text-sm">
-        SIM Pre-Order © 2026 - Sistem Informasi Manajemen berbasis Web3
+        SIM Pre-Order © 2026 - Sistem Informasi Manajemen Modern
       </footer>
     </div>
   );

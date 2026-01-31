@@ -167,7 +167,7 @@ export default function Sidebar() {
                         </div>
                         <div>
                             <h1 className="font-bold text-white">SIM Pre-Order</h1>
-                            <p className="text-xs text-slate-400">Web3 Management</p>
+                            <p className="text-xs text-slate-400">Management System</p>
                         </div>
                     </div>
                 </div>

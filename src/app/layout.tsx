@@ -10,7 +10,7 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: 'SIM Pre-Order | Sistem Manajemen Kredit Barang',
-  description: 'Sistem Informasi Manajemen berbasis Web3 untuk pencatatan dan monitoring kredit barang melalui mekanisme Pre-Order',
+  description: 'Sistem Informasi Manajemen modern untuk pencatatan dan monitoring kredit barang melalui mekanisme Pre-Order',
 };
 
 export default function RootLayout({

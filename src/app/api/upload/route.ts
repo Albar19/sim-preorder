@@ -3,8 +3,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { writeFile } from 'fs/promises';
+import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+import { existsSync } from 'fs';
 
 export async function POST(req: NextRequest) {
     try {
@@ -48,13 +49,21 @@ export async function POST(req: NextRequest) {
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
 
-        // Save to public/uploads
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+        // Determine upload directory based on environment
+        const uploadDir = process.env.NODE_ENV === 'production'
+            ? '/app/uploads'
+            : path.join(process.cwd(), 'public', 'uploads');
+
+        // Create directory if it doesn't exist
+        if (!existsSync(uploadDir)) {
+            await mkdir(uploadDir, { recursive: true });
+        }
+
         const filepath = path.join(uploadDir, filename);
         await writeFile(filepath, buffer);
 
-        // Return the URL
-        const imageUrl = `/uploads/${filename}`;
+        // Return the URL using API route for serving
+        const imageUrl = `/api/images/${filename}`;
 
         return NextResponse.json({ imageUrl }, { status: 201 });
     } catch (error) {

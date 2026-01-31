@@ -31,8 +31,9 @@ services:
       - "3000:3000"
     environment:
       - DATABASE_URL=postgresql://admin:admin123@db:5432/simpreorder
-      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_URL=https://sim.mhalbar.tech
       - NEXTAUTH_SECRET=sim-preorder-secret-key-change-in-production
+      - NEXTAUTH_TRUST_HOST=true
     volumes:
       - uploads-data:/app/uploads
     depends_on:

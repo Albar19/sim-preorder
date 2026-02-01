@@ -26,13 +26,14 @@ export default function LoginPage() {
 
             if (result?.error) {
                 setError(result.error);
+                setLoading(false);
             } else {
-                router.push('/dashboard');
-                router.refresh();
+                // Redirect handled by middleware - just push to dashboard
+                // Middleware will automatically redirect to correct role dashboard
+                window.location.href = '/dashboard';
             }
         } catch {
             setError('Terjadi kesalahan saat login');
-        } finally {
             setLoading(false);
         }
     };

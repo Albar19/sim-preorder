@@ -10,8 +10,9 @@ export async function middleware(request: NextRequest) {
     const publicRoutes = ['/login', '/register', '/'];
     if (publicRoutes.includes(pathname)) {
         if (token) {
-            // Redirect to dashboard if already logged in
-            return NextResponse.redirect(new URL('/dashboard', request.url));
+            // Redirect langsung ke dashboard sesuai role
+            const role = (token.role as string)?.toLowerCase() || 'user';
+            return NextResponse.redirect(new URL(`/dashboard/${role}`, request.url));
         }
         return NextResponse.next();
     }
@@ -23,22 +24,24 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
     }
 
+    const role = (token.role as string)?.toLowerCase() || 'user';
+
+    // Redirect /dashboard ke dashboard spesifik role
+    if (pathname === '/dashboard') {
+        return NextResponse.redirect(new URL(`/dashboard/${role}`, request.url));
+    }
+
     // Role-based route protection
-    const role = token.role as string;
-
-    // Owner routes
-    if (pathname.startsWith('/dashboard/owner') && role !== 'OWNER') {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+    if (pathname.startsWith('/dashboard/owner') && token.role !== 'OWNER') {
+        return NextResponse.redirect(new URL(`/dashboard/${role}`, request.url));
     }
 
-    // Kurir routes
-    if (pathname.startsWith('/dashboard/kurir') && role !== 'KURIR') {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+    if (pathname.startsWith('/dashboard/kurir') && token.role !== 'KURIR') {
+        return NextResponse.redirect(new URL(`/dashboard/${role}`, request.url));
     }
 
-    // User routes
-    if (pathname.startsWith('/dashboard/user') && role !== 'USER') {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+    if (pathname.startsWith('/dashboard/user') && token.role !== 'USER') {
+        return NextResponse.redirect(new URL(`/dashboard/${role}`, request.url));
     }
 
     return NextResponse.next();

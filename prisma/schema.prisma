@@ -8,31 +8,34 @@ datasource db {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  password     String
-  name         String
-  role         String        @default("USER")
-  phone        String?
-  address      String?
-  orders       Order[]
-  deliveries   Delivery[]
-  itemRequests ItemRequest[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  password           String
+  name               String
+  role               String              @default("USER")
+  phone              String?
+  address            String?
+  orders             Order[]
+  deliveries         Delivery[]
+  itemRequests       ItemRequest[]
+  creditApplications CreditApplication[]
+  notifications      Notification[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 }
 
 model Item {
-  id          String      @id @default(cuid())
-  name        String
-  description String?
-  price       Float
-  stock       Int         @default(0)
-  imageUrl    String?
-  isActive    Boolean     @default(true)
-  orderItems  OrderItem[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id                 String              @id @default(cuid())
+  name               String
+  description        String?
+  price              Float
+  stock              Int                 @default(0)
+  imageUrl           String?
+  isActive           Boolean             @default(true)
+  orderItems         OrderItem[]
+  creditApplications CreditApplication[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 }
 
 model Order {
@@ -98,4 +101,57 @@ model ItemRequest {
   adminNotes  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ============ NEW CREDIT SYSTEM MODELS ============
+
+model CreditApplication {
+  id              String        @id @default(cuid())
+  applicationNo   String        @unique
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantity        Int           @default(1)
+  itemPrice       Float         // Harga satuan saat pengajuan
+  totalPrice      Float         // Total harga (quantity * itemPrice)
+  tenor           Int           // Jumlah bulan cicilan (3, 6, 12)
+  monthlyAmount   Float         // Jumlah cicilan per bulan
+  status          String        @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED, CANCELLED
+  notes           String?       // Catatan dari user
+  adminNotes      String?       // Catatan dari owner
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  installments    Installment[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model Installment {
+  id              String            @id @default(cuid())
+  applicationId   String
+  application     CreditApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  installmentNo   Int               // Cicilan ke-1, 2, 3, dst
+  amount          Float             // Jumlah yang harus dibayar
+  dueDate         DateTime          // Tanggal jatuh tempo
+  paidAmount      Float             @default(0)
+  paidAt          DateTime?
+  status          String            @default("UNPAID") // UNPAID, PAID, OVERDUE
+  paymentProof    String?           // URL bukti pembayaran
+  confirmedBy     String?           // ID owner yang konfirmasi
+  confirmedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   // PAYMENT_DUE, PAYMENT_REMINDER, APPLICATION_APPROVED, APPLICATION_REJECTED
+  link      String?  // Link untuk navigasi
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

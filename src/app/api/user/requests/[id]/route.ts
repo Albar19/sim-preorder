@@ -92,6 +92,28 @@ export async function PUT(
                     }
                 });
 
+                // Generate order number
+                const orderCount = await tx.order.count();
+                const orderNumber = `ORD-${String(orderCount + 1).padStart(6, '0')}`;
+
+                // Create Order immediately so owner can assign kurir
+                const order = await tx.order.create({
+                    data: {
+                        orderNumber,
+                        userId: session.user.id,
+                        totalAmount: grossTotal,
+                        status: 'PROCESSING', // Ready for kurir assignment
+                        notes: `Request: ${existingRequest.itemName} | ${applicationNo}`,
+                        items: {
+                            create: {
+                                itemId: customItem.id,
+                                quantity: existingRequest.quantity,
+                                price: existingRequest.ownerPrice!
+                            }
+                        }
+                    }
+                });
+
                 // Update request
                 const updatedRequest = await tx.itemRequest.update({
                     where: { id },
@@ -103,18 +125,32 @@ export async function PUT(
                     }
                 });
 
-                // Create notification for owner
+                // Create notification for user
                 await tx.notification.create({
                     data: {
-                        userId: session.user.id, // We'll notify the user about their own action
+                        userId: session.user.id,
                         title: 'Request Barang Disetujui',
-                        message: `Anda menyetujui penawaran harga untuk "${existingRequest.itemName}". Pengajuan kredit telah dibuat.`,
+                        message: `Anda menyetujui penawaran harga untuk "${existingRequest.itemName}". Order ${orderNumber} siap dikirim.`,
                         type: 'REQUEST_ACCEPTED',
-                        link: `/dashboard/user/credits`
+                        link: `/dashboard/user/orders`
                     }
                 });
 
-                return { request: updatedRequest, application };
+                // Notify owners about new order for kurir assignment
+                const owners = await tx.user.findMany({ where: { role: 'OWNER' } });
+                for (const owner of owners) {
+                    await tx.notification.create({
+                        data: {
+                            userId: owner.id,
+                            title: 'Order Baru dari Request',
+                            message: `${session.user.name} menerima penawaran "${existingRequest.itemName}". Silakan assign kurir.`,
+                            type: 'NEW_ORDER',
+                            link: `/dashboard/owner/orders`
+                        }
+                    });
+                }
+
+                return { request: updatedRequest, application, order };
             });
 
             return NextResponse.json(result);

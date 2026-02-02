@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
-// POST - Owner approve pengajuan kredit + buat Order untuk pengiriman
+// POST - Owner approve pengajuan kredit (buat cicilan)
+// Order sudah dibuat saat user accept, jadi tidak perlu buat Order lagi
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -50,11 +51,7 @@ export async function POST(
             });
         }
 
-        // Generate order number
-        const orderCount = await prisma.order.count();
-        const orderNumber = `ORD-${String(orderCount + 1).padStart(6, '0')}`;
-
-        // Update status, buat cicilan, dan buat Order untuk pengiriman
+        // Update status dan buat cicilan
         const result = await prisma.$transaction(async (tx) => {
             // Update application
             const app = await tx.creditApplication.update({
@@ -71,36 +68,18 @@ export async function POST(
                 data: installmentsData
             });
 
-            // Create Order untuk pengiriman barang
-            const order = await tx.order.create({
-                data: {
-                    orderNumber,
-                    userId: application.userId,
-                    totalAmount: application.totalPrice,
-                    status: 'PROCESSING', // Siap untuk diproses/dikirim
-                    notes: `Kredit ${application.applicationNo} - ${application.item.name} x${application.quantity}`,
-                    items: {
-                        create: {
-                            itemId: application.itemId,
-                            quantity: application.quantity,
-                            price: application.itemPrice
-                        }
-                    }
-                }
-            });
-
             // Create notification for user
             await tx.notification.create({
                 data: {
                     userId: application.userId,
                     title: 'Pengajuan Kredit Disetujui',
-                    message: `Pengajuan kredit ${application.applicationNo} telah disetujui. Order ${orderNumber} sedang diproses untuk pengiriman.`,
+                    message: `Pengajuan kredit ${application.applicationNo} telah disetujui. Cicilan telah dibuat.`,
                     type: 'APPLICATION_APPROVED',
-                    link: '/dashboard/user/orders'
+                    link: '/dashboard/user/installments'
                 }
             });
 
-            return { application: app, order };
+            return { application: app };
         });
 
         return NextResponse.json(result);

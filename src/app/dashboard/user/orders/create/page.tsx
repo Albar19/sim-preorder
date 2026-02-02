@@ -28,6 +28,7 @@ function CheckoutContent() {
     const [submitting, setSubmitting] = useState(false);
     const [notes, setNotes] = useState('');
     const [error, setError] = useState('');
+    const [tenor, setTenor] = useState(6); // Default 6 bulan
 
     useEffect(() => {
         const cartData = searchParams.get('cart');
@@ -79,31 +80,41 @@ function CheckoutContent() {
         }, 0);
     };
 
+    const monthlyAmount = Math.ceil(getTotalPrice() / tenor);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSubmitting(true);
         setError('');
 
         try {
-            const res = await fetch('/api/orders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    items: cart,
-                    notes,
-                }),
-            });
+            // Submit each cart item as a separate credit application
+            for (const cartItem of cart) {
+                const item = items.find(i => i.id === cartItem.itemId);
+                if (!item) continue;
 
-            if (res.ok) {
-                router.push('/dashboard/user/orders');
-                router.refresh();
-            } else {
-                const data = await res.json();
-                setError(data.error || 'Gagal membuat pre-order');
+                const res = await fetch('/api/credit/applications', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        itemId: cartItem.itemId,
+                        quantity: cartItem.quantity,
+                        tenor,
+                        notes,
+                    }),
+                });
+
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Gagal mengajukan kredit');
+                }
             }
+
+            router.push('/dashboard/user/credits');
+            router.refresh();
         } catch (err) {
             console.error('Checkout error:', err);
-            setError('Terjadi kesalahan saat memproses pesanan');
+            setError(err instanceof Error ? err.message : 'Terjadi kesalahan saat memproses pesanan');
         } finally {
             setSubmitting(false);
         }
@@ -127,8 +138,8 @@ function CheckoutContent() {
                 >
                     ← Kembali ke Katalog
                 </Link>
-                <h1 className="text-3xl font-bold text-white">Konfirmasi Pre-Order 🛍️</h1>
-                <p className="text-slate-400 mt-2">Tinjau pesanan Anda sebelum melakukan konfirmasi</p>
+                <h1 className="text-3xl font-bold text-white">Checkout Kredit 🛍️</h1>
+                <p className="text-slate-400 mt-2">Pilih metode pembayaran dan konfirmasi pesanan</p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -169,6 +180,34 @@ function CheckoutContent() {
                         </div>
                     </div>
 
+                    {/* Tempo/Metode Pembayaran */}
+                    <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6">
+                        <h2 className="text-lg font-semibold text-white mb-4">Metode Pembayaran</h2>
+                        <div className="grid grid-cols-4 gap-3">
+                            {[{ value: 1, label: 'Cash' }, { value: 3, label: '3 Bulan' }, { value: 6, label: '6 Bulan' }, { value: 12, label: '12 Bulan' }].map((t) => (
+                                <button
+                                    key={t.value}
+                                    type="button"
+                                    onClick={() => setTenor(t.value)}
+                                    className={`py-4 rounded-xl text-center font-medium transition-all ${tenor === t.value
+                                        ? t.value === 1
+                                            ? 'bg-green-600 text-white ring-2 ring-green-400'
+                                            : 'bg-purple-600 text-white ring-2 ring-purple-400'
+                                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                        }`}
+                                >
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-slate-400 text-sm mt-4">
+                            {tenor === 1
+                                ? '💵 Bayar langsung tanpa cicilan'
+                                : `📅 Cicilan ${tenor}x pembayaran (Estimasi jatuh tempo pertama: 1 ${new Date(new Date().setMonth(new Date().getMonth() + 1)).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })})`
+                            }
+                        </p>
+                    </div>
+
                     <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-6">
                         <h2 className="text-lg font-semibold text-white mb-4">Catatan Tambahan</h2>
                         <textarea
@@ -192,12 +231,16 @@ function CheckoutContent() {
                                 <span>{formatCurrency(getTotalPrice())}</span>
                             </div>
                             <div className="flex justify-between text-slate-400">
-                                <span>Biaya Layanan</span>
-                                <span>Rp 0</span>
+                                <span>Metode</span>
+                                <span className="text-white">{tenor === 1 ? 'Cash' : `${tenor} Bulan`}</span>
                             </div>
                             <div className="border-t border-slate-700 pt-3 flex justify-between">
-                                <span className="text-white font-semibold">Total</span>
-                                <span className="text-2xl font-bold text-purple-400">{formatCurrency(getTotalPrice())}</span>
+                                <span className="text-white font-semibold">
+                                    {tenor === 1 ? 'Total Bayar' : 'Cicilan/bulan'}
+                                </span>
+                                <span className={`text-2xl font-bold ${tenor === 1 ? 'text-green-400' : 'text-purple-400'}`}>
+                                    {formatCurrency(monthlyAmount)}
+                                </span>
                             </div>
                         </div>
 
@@ -211,7 +254,9 @@ function CheckoutContent() {
                             onClick={handleSubmit}
                             disabled={submitting || cart.length === 0}
                             className={`w-full py-4 rounded-xl font-bold text-white transition-all ${submitting || cart.length === 0
-                                    ? 'bg-slate-600 cursor-not-allowed'
+                                ? 'bg-slate-600 cursor-not-allowed'
+                                : tenor === 1
+                                    ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg shadow-green-500/25 active:scale-[0.98]'
                                     : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25 active:scale-[0.98]'
                                 }`}
                         >
@@ -224,12 +269,12 @@ function CheckoutContent() {
                                     Memproses...
                                 </span>
                             ) : (
-                                'Konfirmasi Pre-Order'
+                                tenor === 1 ? 'Ajukan Pembelian Cash' : 'Ajukan Kredit'
                             )}
                         </button>
 
                         <p className="text-xs text-slate-500 mt-4 text-center">
-                            Dengan mengklik tombol di atas, Anda menyetujui sistem pembayaran pre-order kami.
+                            Pengajuan akan direview oleh Owner sebelum diproses.
                         </p>
                     </div>
                 </div>

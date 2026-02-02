@@ -109,8 +109,8 @@ export default function UserCreditsPage() {
                         key={status}
                         onClick={() => setFilter(status)}
                         className={`px-3 py-1.5 rounded-lg text-sm transition-all ${filter === status
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
                             }`}
                     >
                         {status === 'all' ? 'Semua' : status === 'PENDING' ? 'Menunggu' : status === 'APPROVED' ? 'Disetujui' : status === 'COMPLETED' ? 'Lunas' : 'Ditolak'}
@@ -177,6 +177,11 @@ export default function UserCreditsPage() {
                                         <span className="text-slate-400">
                                             Cicilan: <span className="text-purple-400 font-medium">{formatCurrency(app.monthlyAmount)}/bln</span>
                                         </span>
+                                        {app.status === 'PENDING' && app.tenor > 1 && (
+                                            <span className="text-slate-400">
+                                                Estimasi Jatuh Tempo: <span className="text-green-400">1 {new Date(new Date().setMonth(new Date().getMonth() + 1)).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}</span>
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
 

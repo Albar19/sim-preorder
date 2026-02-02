@@ -32,7 +32,7 @@ export async function POST(
         }
 
         // Generate installments
-        const installmentsData = [];
+        const installmentsData: { applicationId: string; installmentNo: number; amount: number; dueDate: Date; status: string }[] = [];
         const now = new Date();
 
         for (let i = 1; i <= application.tenor; i++) {

@@ -8,6 +8,13 @@ interface User {
     name: string;
     email: string;
     phone: string | null;
+    role?: string;
+}
+
+interface Kurir {
+    id: string;
+    name: string;
+    phone: string | null;
 }
 
 interface Item {
@@ -54,6 +61,11 @@ export default function OwnerCreditsPage() {
     const [items, setItems] = useState<Item[]>([]);
     const [createForm, setCreateForm] = useState({ userId: '', itemId: '', quantity: 1, tenor: 6, notes: '' });
 
+    // Assign Kurir Modal  
+    const [kurirs, setKurirs] = useState<Kurir[]>([]);
+    const [assignModal, setAssignModal] = useState<{ appId: string; show: boolean }>({ appId: '', show: false });
+    const [selectedKurir, setSelectedKurir] = useState('');
+
     useEffect(() => {
         fetchApplications();
         fetchUsersAndItems();
@@ -77,7 +89,11 @@ export default function OwnerCreditsPage() {
                 fetch('/api/users'),
                 fetch('/api/items')
             ]);
-            if (usersRes.ok) setUsers(await usersRes.json());
+            if (usersRes.ok) {
+                const allUsers = await usersRes.json();
+                setUsers(allUsers);
+                setKurirs(allUsers.filter((u: User) => u.role === 'KURIR'));
+            }
             if (itemsRes.ok) setItems(await itemsRes.json());
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -191,6 +207,53 @@ export default function OwnerCreditsPage() {
             }
         } catch (error) {
             console.error('Error:', error);
+        } finally {
+            setProcessing(null);
+        }
+    };
+
+    const handleAssignKurir = async () => {
+        if (!selectedKurir || !assignModal.appId) {
+            alert('Pilih kurir terlebih dahulu');
+            return;
+        }
+        setProcessing(assignModal.appId);
+        try {
+            // Find the credit application to get the order
+            const app = applications.find(a => a.id === assignModal.appId);
+            if (!app) return;
+
+            // First, we need to find the order created from this application
+            // The order should have notes containing the application number
+            const ordersRes = await fetch('/api/owner/orders');
+            if (!ordersRes.ok) throw new Error('Failed to fetch orders');
+
+            const orders = await ordersRes.json();
+            const relatedOrder = orders.find((o: { notes: string | null; }) => o.notes?.includes(app.applicationNo));
+
+            if (!relatedOrder) {
+                alert('Order belum ditemukan. Coba refresh halaman.');
+                return;
+            }
+
+            // Assign kurir to the order
+            const res = await fetch(`/api/owner/orders/${relatedOrder.id}/assign-kurir`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kurirId: selectedKurir })
+            });
+
+            if (res.ok) {
+                alert('Kurir berhasil ditugaskan!');
+                setAssignModal({ appId: '', show: false });
+                setSelectedKurir('');
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Gagal menugaskan kurir');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Terjadi kesalahan');
         } finally {
             setProcessing(null);
         }
@@ -373,6 +436,18 @@ export default function OwnerCreditsPage() {
                                                     ✎
                                                 </button>
                                             </>
+                                        )}
+                                        {app.status === 'APPROVED' && (
+                                            <button
+                                                onClick={() => {
+                                                    setAssignModal({ appId: app.id, show: true });
+                                                    setSelectedKurir('');
+                                                }}
+                                                disabled={processing === app.id}
+                                                className="px-2 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 disabled:opacity-50"
+                                            >
+                                                🚚 Assign Kurir
+                                            </button>
                                         )}
                                         <button
                                             onClick={() => handleDelete(app.id)}
@@ -573,6 +648,55 @@ export default function OwnerCreditsPage() {
                                 className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
                             >
                                 Buat
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Assign Kurir Modal */}
+            {assignModal.show && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full">
+                        <h3 className="text-lg font-bold text-white mb-4">🚚 Assign Kurir</h3>
+                        <p className="text-slate-400 text-sm mb-4">
+                            Pilih kurir untuk mengantarkan barang dari pengajuan kredit ini.
+                        </p>
+
+                        <div className="mb-4">
+                            <label className="block text-sm text-slate-400 mb-2">Pilih Kurir</label>
+                            <select
+                                value={selectedKurir}
+                                onChange={(e) => setSelectedKurir(e.target.value)}
+                                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
+                            >
+                                <option value="">-- Pilih Kurir --</option>
+                                {kurirs.map((k) => (
+                                    <option key={k.id} value={k.id}>
+                                        {k.name} {k.phone && `(${k.phone})`}
+                                    </option>
+                                ))}
+                            </select>
+                            {kurirs.length === 0 && (
+                                <p className="text-xs text-yellow-400 mt-2">
+                                    ⚠️ Belum ada kurir terdaftar. Tambahkan user dengan role KURIR terlebih dahulu.
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setAssignModal({ appId: '', show: false })}
+                                className="flex-1 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleAssignKurir}
+                                disabled={processing !== null || !selectedKurir}
+                                className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                            >
+                                Assign Kurir
                             </button>
                         </div>
                     </div>

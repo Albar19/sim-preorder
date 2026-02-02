@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
-// POST - Owner approve pengajuan kredit
+// POST - Owner approve pengajuan kredit + buat Order untuk pengiriman
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -18,9 +18,10 @@ export async function POST(
         const body = await request.json();
         const { adminNotes } = body;
 
-        // Cek aplikasi
+        // Cek aplikasi dengan item
         const application = await prisma.creditApplication.findUnique({
-            where: { id }
+            where: { id },
+            include: { item: true, user: true }
         });
 
         if (!application) {
@@ -49,8 +50,12 @@ export async function POST(
             });
         }
 
-        // Update status dan buat cicilan
-        const updated = await prisma.$transaction(async (tx) => {
+        // Generate order number
+        const orderCount = await prisma.order.count();
+        const orderNumber = `ORD-${String(orderCount + 1).padStart(6, '0')}`;
+
+        // Update status, buat cicilan, dan buat Order untuk pengiriman
+        const result = await prisma.$transaction(async (tx) => {
             // Update application
             const app = await tx.creditApplication.update({
                 where: { id },
@@ -66,21 +71,39 @@ export async function POST(
                 data: installmentsData
             });
 
+            // Create Order untuk pengiriman barang
+            const order = await tx.order.create({
+                data: {
+                    orderNumber,
+                    userId: application.userId,
+                    totalAmount: application.totalPrice,
+                    status: 'PROCESSING', // Siap untuk diproses/dikirim
+                    notes: `Kredit ${application.applicationNo} - ${application.item.name} x${application.quantity}`,
+                    items: {
+                        create: {
+                            itemId: application.itemId,
+                            quantity: application.quantity,
+                            price: application.itemPrice
+                        }
+                    }
+                }
+            });
+
             // Create notification for user
             await tx.notification.create({
                 data: {
                     userId: application.userId,
                     title: 'Pengajuan Kredit Disetujui',
-                    message: `Pengajuan kredit ${application.applicationNo} telah disetujui. Silakan lihat jadwal cicilan Anda.`,
+                    message: `Pengajuan kredit ${application.applicationNo} telah disetujui. Order ${orderNumber} sedang diproses untuk pengiriman.`,
                     type: 'APPLICATION_APPROVED',
-                    link: '/dashboard/user/installments'
+                    link: '/dashboard/user/orders'
                 }
             });
 
-            return app;
+            return { application: app, order };
         });
 
-        return NextResponse.json(updated);
+        return NextResponse.json(result);
     } catch (error) {
         console.error('Error approving application:', error);
         return NextResponse.json({ error: 'Gagal menyetujui pengajuan' }, { status: 500 });

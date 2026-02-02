@@ -27,6 +27,9 @@ export default function UserInstallmentsPage() {
     const [filter, setFilter] = useState('all');
     const [uploading, setUploading] = useState<string | null>(null);
     const [uploadModal, setUploadModal] = useState<{ show: boolean; installment: Installment | null }>({ show: false, installment: null });
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -45,13 +48,32 @@ export default function UserInstallmentsPage() {
         }
     };
 
-    const handleUploadProof = async (file: File, installmentId: string) => {
-        setUploading(installmentId);
+    const handleFileSelect = (file: File) => {
+        if (previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+        }
+        setSelectedFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
+    };
+
+    const handleCloseModal = () => {
+        if (previewUrl) {
+            URL.revokeObjectURL(previewUrl);
+        }
+        setUploadModal({ show: false, installment: null });
+        setPreviewUrl(null);
+        setSelectedFile(null);
+    };
+
+    const handleUploadProof = async () => {
+        if (!selectedFile || !uploadModal.installment) return;
+
+        setUploading(uploadModal.installment.id);
         try {
             const formData = new FormData();
-            formData.append('proof', file);
+            formData.append('proof', selectedFile);
 
-            const res = await fetch(`/api/installments/${installmentId}/upload-proof`, {
+            const res = await fetch(`/api/installments/${uploadModal.installment.id}/upload-proof`, {
                 method: 'POST',
                 body: formData
             });
@@ -59,7 +81,7 @@ export default function UserInstallmentsPage() {
             if (res.ok) {
                 alert('Bukti transfer berhasil diupload! Menunggu verifikasi owner.');
                 fetchInstallments();
-                setUploadModal({ show: false, installment: null });
+                handleCloseModal();
             } else {
                 const data = await res.json();
                 alert(data.error || 'Gagal mengupload bukti transfer');
@@ -237,7 +259,7 @@ export default function UserInstallmentsPage() {
             {/* Upload Modal */}
             {uploadModal.show && uploadModal.installment && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full">
+                    <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
                         <h3 className="text-lg font-bold text-white mb-2">📤 Upload Bukti Transfer</h3>
                         <p className="text-slate-400 text-sm mb-4">
                             Cicilan ke-{uploadModal.installment.installmentNo}: <strong className="text-white">{formatCurrency(uploadModal.installment.amount)}</strong>
@@ -250,6 +272,18 @@ export default function UserInstallmentsPage() {
                             <p className="text-slate-400 text-sm">a.n. Toko Kredit</p>
                         </div>
 
+                        {/* Preview Image */}
+                        {previewUrl && (
+                            <div className="mb-4">
+                                <p className="text-xs text-slate-400 mb-1">Preview Bukti:</p>
+                                <img
+                                    src={previewUrl}
+                                    alt="Preview"
+                                    className="w-full rounded-lg border border-slate-600 object-contain max-h-[300px]"
+                                />
+                            </div>
+                        )}
+
                         <input
                             ref={fileInputRef}
                             type="file"
@@ -257,26 +291,43 @@ export default function UserInstallmentsPage() {
                             className="hidden"
                             onChange={(e) => {
                                 const file = e.target.files?.[0];
-                                if (file && uploadModal.installment) {
-                                    handleUploadProof(file, uploadModal.installment.id);
+                                if (file) {
+                                    handleFileSelect(file);
                                 }
                             }}
                         />
 
                         <div className="flex gap-3">
                             <button
-                                onClick={() => setUploadModal({ show: false, installment: null })}
+                                onClick={handleCloseModal}
                                 className="flex-1 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600"
                             >
                                 Batal
                             </button>
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={uploading !== null}
-                                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                            >
-                                {uploading ? 'Mengupload...' : 'Pilih File'}
-                            </button>
+                            {!selectedFile ? (
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                                >
+                                    Pilih File
+                                </button>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-500"
+                                    >
+                                        Ganti
+                                    </button>
+                                    <button
+                                        onClick={handleUploadProof}
+                                        disabled={uploading !== null}
+                                        className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                                    >
+                                        {uploading ? 'Mengupload...' : 'Upload'}
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

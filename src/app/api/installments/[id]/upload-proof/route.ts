@@ -57,8 +57,8 @@ export async function POST(
         const ext = file.name.split('.').pop() || 'jpg';
         const filename = `proof_${id}_${timestamp}.${ext}`;
 
-        // Ensure upload directory exists
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'proofs');
+        // Ensure upload directory exists - use /app/uploads for Docker volume mount
+        const uploadDir = path.join(process.cwd(), 'uploads', 'proofs');
         await mkdir(uploadDir, { recursive: true });
 
         // Save file
@@ -67,8 +67,8 @@ export async function POST(
         const filepath = path.join(uploadDir, filename);
         await writeFile(filepath, buffer);
 
-        // Update installment with proof URL
-        const proofUrl = `/uploads/proofs/${filename}`;
+        // Update installment with proof URL - use API route to serve image
+        const proofUrl = `/api/uploads/proofs/${filename}`;
         const updated = await prisma.installment.update({
             where: { id },
             data: {

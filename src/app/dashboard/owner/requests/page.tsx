@@ -203,8 +203,8 @@ export default function OwnerRequestsPage() {
                         key={status}
                         onClick={() => setFilter(status)}
                         className={`px-3 py-1.5 rounded-lg text-sm transition-all ${filter === status
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
                             }`}
                     >
                         {status === 'all' ? 'Semua' : getStatusLabel(status)}
@@ -228,7 +228,7 @@ export default function OwnerRequestsPage() {
                                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">User</th>
                                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Barang</th>
                                 <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Qty</th>
-                                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Budget Max</th>
+                                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">DP User</th>
                                 <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Harga Owner</th>
                                 <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Status</th>
                                 <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Aksi</th>

@@ -47,7 +47,15 @@ export async function PUT(
             }
 
             // Calculate credit application details
-            const totalPrice = existingRequest.ownerPrice! * existingRequest.quantity;
+            // DP (maxPrice) dikurangi dari total
+            const grossTotal = existingRequest.ownerPrice! * existingRequest.quantity;
+            const dp = existingRequest.maxPrice || 0;
+            const totalPrice = grossTotal - dp; // Total setelah dikurangi DP
+
+            if (totalPrice <= 0) {
+                return NextResponse.json({ error: 'DP melebihi atau sama dengan total harga' }, { status: 400 });
+            }
+
             const monthlyAmount = Math.ceil(totalPrice / tenor);
 
             // Generate application number
@@ -56,8 +64,7 @@ export async function PUT(
 
             // Create credit application and update request in transaction
             const result = await prisma.$transaction(async (tx) => {
-                // Create a temporary item for this request (or use a special "custom item" approach)
-                // For now, we'll create a virtual item record
+                // Create a temporary item for this request
                 const customItem = await tx.item.create({
                     data: {
                         name: existingRequest.itemName,
@@ -69,7 +76,7 @@ export async function PUT(
                     }
                 });
 
-                // Create credit application
+                // Create credit application with DP info in notes
                 const application = await tx.creditApplication.create({
                     data: {
                         applicationNo,
@@ -77,10 +84,10 @@ export async function PUT(
                         itemId: customItem.id,
                         quantity: existingRequest.quantity,
                         itemPrice: existingRequest.ownerPrice!,
-                        totalPrice,
+                        totalPrice, // Total setelah dikurangi DP
                         tenor,
                         monthlyAmount,
-                        notes: `Request Barang: ${existingRequest.itemName}`,
+                        notes: `Request Barang: ${existingRequest.itemName} | DP: Rp ${dp.toLocaleString('id-ID')} | Total Awal: Rp ${grossTotal.toLocaleString('id-ID')}`,
                         status: 'PENDING', // Still needs owner approval for credit
                     }
                 });

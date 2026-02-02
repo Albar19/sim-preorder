@@ -287,8 +287,9 @@ export default function UserRequestsPage() {
                             <input type="number" value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value) || 1)} min="1" className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-300 mb-2">Budget Maksimal (Rp)</label>
-                            <input type="number" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} placeholder="Opsional - budget maksimal" className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500" />
+                            <label className="block text-sm font-medium text-slate-300 mb-2">DP (Down Payment) <span className="text-red-400">*</span></label>
+                            <input type="number" value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} required placeholder="Masukkan jumlah DP" className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-500" />
+                            <p className="text-xs text-slate-500 mt-1">DP akan dikurangi dari total harga saat cicilan</p>
                         </div>
                     </div>
 
@@ -339,14 +340,16 @@ export default function UserRequestsPage() {
                                             </span>
                                         </div>
                                         <p className="text-sm text-slate-400 mt-1">x{req.quantity} {req.description && `• ${req.description}`}</p>
-                                        {req.maxPrice && <p className="text-sm text-slate-500">Budget: {formatCurrency(req.maxPrice)}</p>}
+                                        {req.maxPrice && <p className="text-sm text-green-400">💵 DP: {formatCurrency(req.maxPrice)}</p>}
 
                                         {/* Price offer from owner */}
                                         {req.status === 'PRICED' && req.ownerPrice && (
                                             <div className="mt-3 p-3 bg-purple-500/10 border border-purple-500/30 rounded-lg">
                                                 <p className="text-purple-400 font-medium">💰 Penawaran Harga:</p>
                                                 <p className="text-white text-lg font-bold">{formatCurrency(req.ownerPrice)} <span className="text-sm font-normal text-slate-400">x{req.quantity}</span></p>
-                                                <p className="text-sm text-purple-300">Total: {formatCurrency(req.ownerPrice * req.quantity)}</p>
+                                                <p className="text-sm text-slate-400">Total: {formatCurrency(req.ownerPrice * req.quantity)}</p>
+                                                <p className="text-sm text-green-400">- DP: {formatCurrency(req.maxPrice || 0)}</p>
+                                                <p className="text-sm text-purple-300 font-medium">= Sisa Cicilan: {formatCurrency((req.ownerPrice * req.quantity) - (req.maxPrice || 0))}</p>
                                                 {req.adminNotes && <p className="text-sm text-slate-400 mt-1">📝 {req.adminNotes}</p>}
                                             </div>
                                         )}
@@ -395,9 +398,23 @@ export default function UserRequestsPage() {
                             <strong>{acceptModal.request.itemName}</strong> x{acceptModal.request.quantity}
                         </p>
 
-                        <div className="bg-slate-700/50 rounded-lg p-4 mb-4">
-                            <p className="text-slate-400 text-sm">Total Harga:</p>
-                            <p className="text-2xl font-bold text-white">{formatCurrency(acceptModal.request.ownerPrice! * acceptModal.request.quantity)}</p>
+                        <div className="bg-slate-700/50 rounded-lg p-4 mb-4 space-y-1">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-400">Harga per item:</span>
+                                <span className="text-white">{formatCurrency(acceptModal.request.ownerPrice!)} x{acceptModal.request.quantity}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-slate-400">Total:</span>
+                                <span className="text-white">{formatCurrency(acceptModal.request.ownerPrice! * acceptModal.request.quantity)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-green-400">
+                                <span>- DP:</span>
+                                <span>{formatCurrency(acceptModal.request.maxPrice || 0)}</span>
+                            </div>
+                            <div className="flex justify-between text-lg font-bold pt-2 border-t border-slate-600">
+                                <span className="text-slate-300">Sisa Cicilan:</span>
+                                <span className="text-purple-400">{formatCurrency((acceptModal.request.ownerPrice! * acceptModal.request.quantity) - (acceptModal.request.maxPrice || 0))}</span>
+                            </div>
                         </div>
 
                         <div className="mb-4">
@@ -409,15 +426,17 @@ export default function UserRequestsPage() {
                                     { value: 6, label: '6 Bulan', desc: '' },
                                     { value: 12, label: '12 Bulan', desc: '' },
                                 ].map((opt) => {
-                                    const total = acceptModal.request!.ownerPrice! * acceptModal.request!.quantity;
-                                    const monthly = Math.ceil(total / opt.value);
+                                    const grossTotal = acceptModal.request!.ownerPrice! * acceptModal.request!.quantity;
+                                    const dp = acceptModal.request!.maxPrice || 0;
+                                    const afterDp = grossTotal - dp;
+                                    const monthly = Math.ceil(afterDp / opt.value);
                                     return (
                                         <button
                                             key={opt.value}
                                             onClick={() => setSelectedTenor(opt.value)}
                                             className={`p-3 rounded-lg border text-left transition-all ${selectedTenor === opt.value
-                                                    ? 'border-purple-500 bg-purple-500/20'
-                                                    : 'border-slate-600 hover:border-slate-500'
+                                                ? 'border-purple-500 bg-purple-500/20'
+                                                : 'border-slate-600 hover:border-slate-500'
                                                 }`}
                                         >
                                             <p className="text-white font-medium">{opt.label}</p>

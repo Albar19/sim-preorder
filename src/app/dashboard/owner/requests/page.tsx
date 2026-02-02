@@ -1,8 +1,6 @@
 'use client';
 
-import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 
 interface ItemRequest {
     id: string;
@@ -11,6 +9,10 @@ interface ItemRequest {
     imageUrl: string | null;
     quantity: number;
     maxPrice: number | null;
+    ownerPrice: number | null;
+    userAccepted: boolean | null;
+    userTenor: number | null;
+    applicationId: string | null;
     status: string;
     adminNotes: string | null;
     createdAt: string;
@@ -23,10 +25,15 @@ interface ItemRequest {
 }
 
 export default function OwnerRequestsPage() {
-    const { data: session } = useSession();
     const [requests, setRequests] = useState<ItemRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [filter, setFilter] = useState('all');
+
+    // Price Modal
+    const [priceModal, setPriceModal] = useState<{ show: boolean; request: ItemRequest | null }>({ show: false, request: null });
+    const [priceInput, setPriceInput] = useState('');
+    const [adminNotes, setAdminNotes] = useState('');
 
     const fetchRequests = async () => {
         try {
@@ -46,17 +53,53 @@ export default function OwnerRequestsPage() {
         fetchRequests();
     }, []);
 
-    const handleUpdateStatus = async (id: string, status: string, adminNotes?: string) => {
+    const handleSetPrice = async () => {
+        if (!priceModal.request) return;
+        const price = parseFloat(priceInput);
+        if (!price || price <= 0) {
+            alert('Masukkan harga yang valid');
+            return;
+        }
+
+        setActionLoading(priceModal.request.id);
+        try {
+            const res = await fetch(`/api/owner/requests/${priceModal.request.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'SET_PRICE', ownerPrice: price, adminNotes }),
+            });
+
+            if (res.ok) {
+                fetchRequests();
+                setPriceModal({ show: false, request: null });
+                setPriceInput('');
+                setAdminNotes('');
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Gagal set harga');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleReject = async (id: string) => {
+        const reason = prompt('Alasan penolakan (opsional):');
         setActionLoading(id);
         try {
             const res = await fetch(`/api/owner/requests/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status, adminNotes }),
+                body: JSON.stringify({ action: 'REJECT', adminNotes: reason }),
             });
 
             if (res.ok) {
                 fetchRequests();
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Gagal menolak');
             }
         } catch (error) {
             console.error('Error:', error);
@@ -67,13 +110,9 @@ export default function OwnerRequestsPage() {
 
     const handleDelete = async (id: string) => {
         if (!confirm('Yakin ingin menghapus request ini?')) return;
-
         setActionLoading(id);
         try {
-            const res = await fetch(`/api/owner/requests/${id}`, {
-                method: 'DELETE',
-            });
-
+            const res = await fetch(`/api/owner/requests/${id}`, { method: 'DELETE' });
             if (res.ok) {
                 fetchRequests();
             }
@@ -82,6 +121,12 @@ export default function OwnerRequestsPage() {
         } finally {
             setActionLoading(null);
         }
+    };
+
+    const openPriceModal = (req: ItemRequest) => {
+        setPriceModal({ show: true, request: req });
+        setPriceInput(req.maxPrice ? String(req.maxPrice) : '');
+        setAdminNotes('');
     };
 
     const formatCurrency = (amount: number) => {
@@ -100,172 +145,240 @@ export default function OwnerRequestsPage() {
         });
     };
 
-    const getStatusBadge = (status: string): React.CSSProperties => {
-        const colors: Record<string, React.CSSProperties> = {
-            PENDING: { background: 'rgba(251, 191, 36, 0.2)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.3)' },
-            APPROVED: { background: 'rgba(34, 197, 94, 0.2)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.3)' },
-            REJECTED: { background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' },
-            FULFILLED: { background: 'rgba(59, 130, 246, 0.2)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.3)' },
+    const getStatusBadge = (status: string) => {
+        const styles: Record<string, string> = {
+            PENDING: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+            PRICED: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+            USER_DECLINED: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+            FULFILLED: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+            REJECTED: 'bg-red-500/20 text-red-400 border-red-500/30',
         };
-        return colors[status] || { background: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8' };
+        return styles[status] || 'bg-slate-500/20 text-slate-400';
     };
 
     const getStatusLabel = (status: string) => {
         const labels: Record<string, string> = {
-            PENDING: 'Menunggu',
-            APPROVED: 'Disetujui',
+            PENDING: 'Menunggu Harga',
+            PRICED: 'Menunggu User',
+            USER_DECLINED: 'User Tolak',
+            FULFILLED: 'Selesai',
             REJECTED: 'Ditolak',
-            FULFILLED: 'Terpenuhi',
         };
         return labels[status] || status;
     };
 
+    const filteredRequests = filter === 'all'
+        ? requests
+        : requests.filter(r => r.status === filter);
+
     const pendingCount = requests.filter((r) => r.status === 'PENDING').length;
+    const pricedCount = requests.filter((r) => r.status === 'PRICED').length;
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-6">
             {/* Header */}
-            <div>
-                <Link
-                    href="/dashboard/owner"
-                    className="text-purple-400 hover:text-purple-300 text-sm transition-colors inline-flex items-center gap-1 mb-4"
-                >
-                    ← Kembali ke Dashboard
-                </Link>
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white">Request Barang dari User</h1>
-                        <p className="text-slate-400 mt-2">Kelola permintaan barang baru dari customer</p>
-                    </div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-white">Request Barang</h1>
+                    <p className="text-slate-400 text-sm mt-1">Kelola permintaan barang dari user</p>
+                </div>
+                <div className="flex gap-2">
                     {pendingCount > 0 && (
-                        <span className="px-4 py-2 rounded-full text-sm font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-                            {pendingCount} menunggu
+                        <span className="px-3 py-1.5 rounded-lg text-sm bg-yellow-500/20 text-yellow-400">
+                            {pendingCount} perlu harga
+                        </span>
+                    )}
+                    {pricedCount > 0 && (
+                        <span className="px-3 py-1.5 rounded-lg text-sm bg-purple-500/20 text-purple-400">
+                            {pricedCount} menunggu user
                         </span>
                     )}
                 </div>
             </div>
 
+            {/* Filter */}
+            <div className="flex gap-2 flex-wrap">
+                {['all', 'PENDING', 'PRICED', 'FULFILLED', 'USER_DECLINED', 'REJECTED'].map((status) => (
+                    <button
+                        key={status}
+                        onClick={() => setFilter(status)}
+                        className={`px-3 py-1.5 rounded-lg text-sm transition-all ${filter === status
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-slate-700/50 text-slate-400 hover:bg-slate-700'
+                            }`}
+                    >
+                        {status === 'all' ? 'Semua' : getStatusLabel(status)}
+                    </button>
+                ))}
+            </div>
+
             {/* Table */}
-            <div className="bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden">
+            <div className="bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden overflow-x-auto">
                 {loading ? (
                     <div className="flex items-center justify-center py-12">
                         <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
                     </div>
-                ) : requests.length === 0 ? (
-                    <div className="text-center py-12">
-                        <svg className="w-16 h-16 text-slate-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <p className="text-slate-400">Belum ada request dari user</p>
-                    </div>
+                ) : filteredRequests.length === 0 ? (
+                    <div className="text-center py-12 text-slate-400">Tidak ada data</div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead className="bg-slate-700/30">
-                                <tr>
-                                    <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">Gambar</th>
-                                    <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">Tanggal</th>
-                                    <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">User</th>
-                                    <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">Nama Barang</th>
-                                    <th className="text-left text-slate-400 text-sm font-medium px-6 py-4">Deskripsi</th>
-                                    <th className="text-center text-slate-400 text-sm font-medium px-6 py-4">Qty</th>
-                                    <th className="text-right text-slate-400 text-sm font-medium px-6 py-4">Harga Max</th>
-                                    <th className="text-center text-slate-400 text-sm font-medium px-6 py-4">Status</th>
-                                    <th className="text-center text-slate-400 text-sm font-medium px-6 py-4">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-700/50">
-                                {requests.map((req) => (
-                                    <tr key={req.id} className="hover:bg-slate-700/20 transition-colors">
-                                        <td className="px-6 py-4">
+                    <table className="w-full min-w-[1000px]">
+                        <thead className="bg-slate-700/30">
+                            <tr>
+                                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Tanggal</th>
+                                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">User</th>
+                                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Barang</th>
+                                <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Qty</th>
+                                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Budget Max</th>
+                                <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Harga Owner</th>
+                                <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Status</th>
+                                <th className="text-center px-4 py-3 text-sm font-medium text-slate-400">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-700/50">
+                            {filteredRequests.map((req) => (
+                                <tr key={req.id} className="hover:bg-slate-700/20">
+                                    <td className="px-4 py-3 text-slate-400 text-sm">{formatDate(req.createdAt)}</td>
+                                    <td className="px-4 py-3">
+                                        <p className="text-white">{req.user.name}</p>
+                                        <p className="text-xs text-slate-500">{req.user.phone || req.user.email}</p>
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex items-center gap-3">
                                             {req.imageUrl ? (
-                                                <img
-                                                    src={req.imageUrl}
-                                                    alt={req.itemName}
-                                                    className="w-12 h-12 object-cover rounded-lg border border-slate-600"
-                                                />
+                                                <img src={req.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover" />
                                             ) : (
-                                                <div className="w-12 h-12 bg-slate-700 rounded-lg flex items-center justify-center">
-                                                    <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                    </svg>
+                                                <div className="w-10 h-10 bg-slate-700 rounded-lg flex items-center justify-center">
+                                                    <span className="text-slate-500">📦</span>
                                                 </div>
                                             )}
-                                        </td>
-                                        <td className="px-6 py-4 text-slate-400 text-sm">
-                                            {formatDate(req.createdAt)}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="text-white font-medium">{req.user.name}</div>
-                                            <div className="text-sm text-slate-400">{req.user.email}</div>
-                                        </td>
-                                        <td className="px-6 py-4 text-white font-medium">{req.itemName}</td>
-                                        <td className="px-6 py-4 text-slate-400 max-w-xs truncate">
-                                            {req.description || '-'}
-                                        </td>
-                                        <td className="px-6 py-4 text-center text-slate-300">{req.quantity}</td>
-                                        <td className="px-6 py-4 text-right text-slate-300">
-                                            {req.maxPrice ? formatCurrency(req.maxPrice) : '-'}
-                                        </td>
-                                        <td className="px-6 py-4 text-center">
-                                            <span
-                                                style={{
-                                                    padding: '6px 14px',
-                                                    borderRadius: '9999px',
-                                                    fontSize: '12px',
-                                                    fontWeight: '500',
-                                                    display: 'inline-block',
-                                                    ...getStatusBadge(req.status),
-                                                }}
-                                            >
-                                                {getStatusLabel(req.status)}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex gap-2 justify-center">
-                                                {req.status === 'PENDING' && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleUpdateStatus(req.id, 'APPROVED')}
-                                                            disabled={actionLoading === req.id}
-                                                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
-                                                        >
-                                                            ✓ Approve
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleUpdateStatus(req.id, 'REJECTED')}
-                                                            disabled={actionLoading === req.id}
-                                                            className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
-                                                        >
-                                                            ✕ Reject
-                                                        </button>
-                                                    </>
-                                                )}
-                                                {req.status === 'APPROVED' && (
-                                                    <button
-                                                        onClick={() => handleUpdateStatus(req.id, 'FULFILLED')}
-                                                        disabled={actionLoading === req.id}
-                                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
-                                                    >
-                                                        ✓ Fulfilled
-                                                    </button>
-                                                )}
-                                                <button
-                                                    onClick={() => handleDelete(req.id)}
-                                                    disabled={actionLoading === req.id}
-                                                    className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
-                                                >
-                                                    🗑
-                                                </button>
+                                            <div>
+                                                <p className="text-white font-medium">{req.itemName}</p>
+                                                <p className="text-xs text-slate-500 max-w-[200px] truncate">{req.description || '-'}</p>
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3 text-center text-slate-300">{req.quantity}</td>
+                                    <td className="px-4 py-3 text-right text-slate-400">
+                                        {req.maxPrice ? formatCurrency(req.maxPrice) : '-'}
+                                    </td>
+                                    <td className="px-4 py-3 text-right">
+                                        {req.ownerPrice ? (
+                                            <span className="text-purple-400 font-medium">{formatCurrency(req.ownerPrice)}</span>
+                                        ) : (
+                                            <span className="text-slate-500">-</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                        <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${getStatusBadge(req.status)}`}>
+                                            {getStatusLabel(req.status)}
+                                        </span>
+                                        {req.userTenor && (
+                                            <p className="text-xs text-slate-500 mt-1">Tenor: {req.userTenor === 1 ? 'Cash' : `${req.userTenor}bln`}</p>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <div className="flex gap-1 justify-center flex-wrap">
+                                            {req.status === 'PENDING' && (
+                                                <>
+                                                    <button
+                                                        onClick={() => openPriceModal(req)}
+                                                        disabled={actionLoading === req.id}
+                                                        className="px-2 py-1 bg-purple-600 text-white text-xs rounded hover:bg-purple-700 disabled:opacity-50"
+                                                    >
+                                                        💰 Set Harga
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleReject(req.id)}
+                                                        disabled={actionLoading === req.id}
+                                                        className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </>
+                                            )}
+                                            {req.status === 'PRICED' && (
+                                                <button
+                                                    onClick={() => openPriceModal(req)}
+                                                    disabled={actionLoading === req.id}
+                                                    className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50"
+                                                >
+                                                    ✎ Ubah Harga
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => handleDelete(req.id)}
+                                                disabled={actionLoading === req.id}
+                                                className="px-2 py-1 bg-slate-600 text-white text-xs rounded hover:bg-slate-500 disabled:opacity-50"
+                                            >
+                                                🗑
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 )}
             </div>
+
+            {/* Price Modal */}
+            {priceModal.show && priceModal.request && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full">
+                        <h3 className="text-lg font-bold text-white mb-2">Set Harga</h3>
+                        <p className="text-slate-400 text-sm mb-4">
+                            <strong>{priceModal.request.itemName}</strong> x{priceModal.request.quantity}
+                            {priceModal.request.maxPrice && (
+                                <span className="block mt-1">Budget user: {formatCurrency(priceModal.request.maxPrice)}</span>
+                            )}
+                        </p>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-1">Harga per item (Rp)</label>
+                                <input
+                                    type="number"
+                                    value={priceInput}
+                                    onChange={(e) => setPriceInput(e.target.value)}
+                                    placeholder="Masukkan harga..."
+                                    className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
+                                />
+                                {priceInput && (
+                                    <p className="text-sm text-purple-400 mt-1">
+                                        Total: {formatCurrency(parseFloat(priceInput) * priceModal.request.quantity)}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-1">Catatan (opsional)</label>
+                                <textarea
+                                    value={adminNotes}
+                                    onChange={(e) => setAdminNotes(e.target.value)}
+                                    placeholder="Catatan untuk user..."
+                                    className="w-full px-4 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white resize-none"
+                                    rows={2}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-6">
+                            <button
+                                onClick={() => setPriceModal({ show: false, request: null })}
+                                className="flex-1 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleSetPrice}
+                                disabled={actionLoading !== null}
+                                className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                            >
+                                Kirim Penawaran
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -5,7 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
-// PUT: Update request status (owner only)
+// PUT: Update request - Owner set price or reject
 export async function PUT(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -23,25 +23,48 @@ export async function PUT(
 
         const { id } = await params;
         const body = await req.json();
-        const { status, adminNotes } = body;
+        const { action, ownerPrice, adminNotes } = body;
 
-        const validStatuses = ['PENDING', 'APPROVED', 'REJECTED', 'FULFILLED'];
-        if (!validStatuses.includes(status)) {
-            return NextResponse.json(
-                { error: 'Status tidak valid' },
-                { status: 400 }
-            );
-        }
-
-        const request = await prisma.itemRequest.update({
-            where: { id },
-            data: {
-                status,
-                adminNotes: adminNotes || null,
-            },
+        const existingRequest = await prisma.itemRequest.findUnique({
+            where: { id }
         });
 
-        return NextResponse.json(request);
+        if (!existingRequest) {
+            return NextResponse.json({ error: 'Request tidak ditemukan' }, { status: 404 });
+        }
+
+        // Handle different actions
+        if (action === 'SET_PRICE') {
+            // Owner sets price - status becomes PRICED
+            if (!ownerPrice || ownerPrice <= 0) {
+                return NextResponse.json({ error: 'Harga harus diisi dan lebih dari 0' }, { status: 400 });
+            }
+
+            const updated = await prisma.itemRequest.update({
+                where: { id },
+                data: {
+                    ownerPrice,
+                    status: 'PRICED',
+                    adminNotes: adminNotes || null,
+                    userAccepted: null, // Reset user response
+                },
+            });
+
+            return NextResponse.json(updated);
+        } else if (action === 'REJECT') {
+            // Owner rejects the request
+            const updated = await prisma.itemRequest.update({
+                where: { id },
+                data: {
+                    status: 'REJECTED',
+                    adminNotes: adminNotes || null,
+                },
+            });
+
+            return NextResponse.json(updated);
+        } else {
+            return NextResponse.json({ error: 'Action tidak valid' }, { status: 400 });
+        }
     } catch (error) {
         console.error('Error updating request:', error);
         return NextResponse.json({ error: 'Server error' }, { status: 500 });
